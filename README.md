@@ -53,3 +53,5 @@ npm start
 ## Safety note
 
 This app is intentionally conservative: the companion is prompted to say when it is unsure, and current/source-backed answers should go through the explicit search button.
+
+Deployment refreshed: 2026-06-12T17:47:40Z.
