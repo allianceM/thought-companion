@@ -47,6 +47,7 @@ const host = process.env.HOST || "127.0.0.1";
 const apiKey = process.env.OPENAI_API_KEY;
 const accessCode = process.env.ACCESS_CODE || "";
 const realtimeModel = process.env.REALTIME_MODEL || "gpt-realtime-2";
+const translationModel = process.env.TRANSLATION_MODEL || "gpt-realtime-translate";
 const textModel = process.env.TEXT_MODEL || "gpt-5.5";
 const realtimeVoice = process.env.REALTIME_VOICE || "marin";
 const preferredSearchToolType = process.env.WEB_SEARCH_TOOL_TYPE || "web_search";
@@ -228,6 +229,50 @@ function trimForPrompt(value, limit = 12000) {
   return `${text.slice(0, limit)}\n\n[Content trimmed for length.]`;
 }
 
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, number));
+}
+
+function getVoiceSpeed(payload = {}) {
+  return Number(clampNumber(payload.voiceSpeed, 0.25, 1.5, 1).toFixed(2));
+}
+
+function getNoiseReduction(payload = {}) {
+  const micScene = cleanText(payload.micScene, "near");
+  return {
+    type: micScene === "far" ? "far_field" : "near_field"
+  };
+}
+
+function getTurnDetection(payload = {}) {
+  const mode = cleanText(payload.vadMode, "balanced");
+  const eagerness = {
+    patient: "low",
+    balanced: "auto",
+    quick: "high"
+  }[mode] || "auto";
+
+  return {
+    type: "semantic_vad",
+    eagerness,
+    create_response: true,
+    interrupt_response: true
+  };
+}
+
+function getTranslationLanguage(payload = {}) {
+  const raw = cleanText(payload.translationTargetCustom, "") || cleanText(payload.translationTargetLanguage, "zh");
+  const normalized = raw.trim();
+  if (/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i.test(normalized)) {
+    return normalized;
+  }
+  return "zh";
+}
+
 function buildInstructions(payload = {}) {
   const name = cleanText(payload.companionName, "思绪搭子");
   const language = cleanText(payload.language, "默认中文，可自然切换英文或其他语言");
@@ -368,6 +413,212 @@ async function callRealtime(sdp, session) {
           `Node fetch failed: ${describeError(fetchError)}.`,
           `curl fallback failed: ${describeError(curlError)}.`,
           "If you use a VPN/proxy, make sure it is available to Terminal, not only to the browser."
+        ].join(" ")
+      );
+    }
+  }
+}
+
+async function createTranslationClientSecretWithFetch(session) {
+  const response = await fetch("https://api.openai.com/v1/realtime/translations/client_secrets", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ session })
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    body: await response.text()
+  };
+}
+
+async function createTranslationClientSecretWithCurl(session, proxyEnv = undefined) {
+  const tempDir = await mkdtemp(join(tmpdir(), "thought-companion-translation-secret-"));
+  const bodyPath = join(tempDir, "body.json");
+
+  try {
+    await writeFile(bodyPath, JSON.stringify({ session }));
+
+    const { stdout } = await execFileAsync(
+      "curl",
+      [
+        "-sS",
+        "--max-time",
+        "60",
+        "-w",
+        "\n%{http_code}",
+        "https://api.openai.com/v1/realtime/translations/client_secrets",
+        "-H",
+        `Authorization: Bearer ${apiKey}`,
+        "-H",
+        "Content-Type: application/json",
+        "--data-binary",
+        `@${bodyPath}`
+      ],
+      {
+        encoding: "utf8",
+        env: proxyEnv ? { ...process.env, ...proxyEnv } : process.env,
+        maxBuffer: 2 * 1024 * 1024
+      }
+    );
+
+    const match = stdout.match(/([\s\S]*)\n(\d{3})$/);
+    if (!match) {
+      throw new Error("curl did not return an HTTP status code.");
+    }
+
+    const status = Number(match[2]);
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: "",
+      body: match[1]
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function createTranslationClientSecret(session) {
+  const proxyEnv = await getEffectiveProxyEnv();
+
+  if (proxyEnv) {
+    try {
+      return await createTranslationClientSecretWithCurl(session, proxyEnv);
+    } catch (curlError) {
+      try {
+        return await createTranslationClientSecretWithFetch(session);
+      } catch (fetchError) {
+        throw new Error(
+          [
+            "Could not create OpenAI translation client secret.",
+            `curl with proxy ${proxySource(proxyEnv)} failed: ${describeError(curlError)}.`,
+            `Node fetch fallback failed: ${describeError(fetchError)}.`
+          ].join(" ")
+        );
+      }
+    }
+  }
+
+  try {
+    return await createTranslationClientSecretWithFetch(session);
+  } catch (fetchError) {
+    try {
+      return await createTranslationClientSecretWithCurl(session);
+    } catch (curlError) {
+      throw new Error(
+        [
+          "Could not create OpenAI translation client secret.",
+          `Node fetch failed: ${describeError(fetchError)}.`,
+          `curl fallback failed: ${describeError(curlError)}.`
+        ].join(" ")
+      );
+    }
+  }
+}
+
+async function callTranslationWithFetch(sdp, clientSecret) {
+  const response = await fetch("https://api.openai.com/v1/realtime/translations/calls", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${clientSecret}`,
+      "Content-Type": "application/sdp"
+    },
+    body: sdp
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    body: await response.text()
+  };
+}
+
+async function callTranslationWithCurl(sdp, clientSecret, proxyEnv = undefined) {
+  const tempDir = await mkdtemp(join(tmpdir(), "thought-companion-translation-call-"));
+  const sdpPath = join(tempDir, "offer.sdp");
+
+  try {
+    await writeFile(sdpPath, sdp);
+
+    const { stdout } = await execFileAsync(
+      "curl",
+      [
+        "-sS",
+        "--max-time",
+        "60",
+        "-w",
+        "\n%{http_code}",
+        "https://api.openai.com/v1/realtime/translations/calls",
+        "-H",
+        `Authorization: Bearer ${clientSecret}`,
+        "-H",
+        "Content-Type: application/sdp",
+        "--data-binary",
+        `@${sdpPath}`
+      ],
+      {
+        encoding: "utf8",
+        env: proxyEnv ? { ...process.env, ...proxyEnv } : process.env,
+        maxBuffer: 4 * 1024 * 1024
+      }
+    );
+
+    const match = stdout.match(/([\s\S]*)\n(\d{3})$/);
+    if (!match) {
+      throw new Error("curl did not return an HTTP status code.");
+    }
+
+    const status = Number(match[2]);
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: "",
+      body: match[1]
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function callTranslation(sdp, clientSecret) {
+  const proxyEnv = await getEffectiveProxyEnv();
+
+  if (proxyEnv) {
+    try {
+      return await callTranslationWithCurl(sdp, clientSecret, proxyEnv);
+    } catch (curlError) {
+      try {
+        return await callTranslationWithFetch(sdp, clientSecret);
+      } catch (fetchError) {
+        throw new Error(
+          [
+            "Could not reach OpenAI Realtime Translation API.",
+            `curl with proxy ${proxySource(proxyEnv)} failed: ${describeError(curlError)}.`,
+            `Node fetch fallback failed: ${describeError(fetchError)}.`
+          ].join(" ")
+        );
+      }
+    }
+  }
+
+  try {
+    return await callTranslationWithFetch(sdp, clientSecret);
+  } catch (fetchError) {
+    try {
+      return await callTranslationWithCurl(sdp, clientSecret);
+    } catch (curlError) {
+      throw new Error(
+        [
+          "Could not reach OpenAI Realtime Translation API.",
+          `Node fetch failed: ${describeError(fetchError)}.`,
+          `curl fallback failed: ${describeError(curlError)}.`
         ].join(" ")
       );
     }
@@ -565,13 +816,75 @@ async function createRealtimeCall(req, res) {
     return;
   }
 
+  if (payload.sessionMode === "translate") {
+    const session = {
+      model: translationModel,
+      audio: {
+        output: {
+          language: getTranslationLanguage(payload)
+        }
+      }
+    };
+
+    let secretResponse;
+    try {
+      secretResponse = await createTranslationClientSecret(session);
+    } catch (error) {
+      send(res, 502, error.message, { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+
+    if (!secretResponse.ok) {
+      send(res, secretResponse.status, secretResponse.body || secretResponse.statusText, {
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      return;
+    }
+
+    let clientSecret;
+    try {
+      const parsed = JSON.parse(secretResponse.body || "{}");
+      clientSecret = parsed.value || parsed.client_secret?.value || parsed.client_secret;
+    } catch {
+      clientSecret = "";
+    }
+
+    if (!clientSecret || typeof clientSecret !== "string") {
+      send(res, 502, "OpenAI did not return a translation client secret.", {
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      return;
+    }
+
+    let response;
+    try {
+      response = await callTranslation(payload.sdp, clientSecret);
+    } catch (error) {
+      send(res, 502, error.message, { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+
+    if (!response.ok) {
+      send(res, response.status, response.body || response.statusText, { "Content-Type": "text/plain; charset=utf-8" });
+      return;
+    }
+
+    send(res, 200, response.body, { "Content-Type": "application/sdp; charset=utf-8" });
+    return;
+  }
+
   const session = {
     type: "realtime",
     model: realtimeModel,
     instructions: buildInstructions(payload),
     audio: {
+      input: {
+        noise_reduction: getNoiseReduction(payload),
+        turn_detection: getTurnDetection(payload)
+      },
       output: {
-        voice: realtimeVoice
+        voice: realtimeVoice,
+        speed: getVoiceSpeed(payload)
       }
     }
   };
@@ -777,6 +1090,7 @@ async function getHealth() {
     ok: true,
     hasApiKey: Boolean(apiKey),
     realtimeModel,
+    translationModel,
     textModel,
     host,
     port,

@@ -27,6 +27,7 @@ body {
   margin: 0;
   min-height: 100vh;
   background: var(--paper);
+  overflow-x: hidden;
 }
 
 button,
@@ -37,6 +38,7 @@ textarea {
 }
 
 button {
+  min-width: 0;
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -92,6 +94,7 @@ input,
 select,
 textarea {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--paper);
@@ -112,8 +115,11 @@ textarea:focus {
 }
 
 .shell {
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   background: linear-gradient(var(--brand-black) 0 350px, var(--paper) 350px);
+  overflow-x: hidden;
 }
 
 .brand-hero {
@@ -132,6 +138,7 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  min-width: 0;
 }
 
 .brand-lockup {
@@ -140,6 +147,7 @@ textarea:focus {
   gap: 14px;
   color: inherit;
   text-decoration: none;
+  min-width: 0;
 }
 
 .brand-lockup img {
@@ -220,6 +228,7 @@ textarea:focus {
   font-size: clamp(2.1rem, 6vw, 5.4rem);
   line-height: 1.02;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .workspace {
@@ -236,6 +245,7 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .conversation-panel {
@@ -252,6 +262,12 @@ textarea:focus {
   gap: 16px;
   padding: 24px;
   border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.panel-head > *,
+.tool-head > * {
+  min-width: 0;
 }
 
 h2 {
@@ -260,6 +276,7 @@ h2 {
   font-size: 1.55rem;
   line-height: 1.16;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .meter {
@@ -349,6 +366,16 @@ h2 {
   background: var(--soft);
 }
 
+.bubble.source {
+  border-color: #d9d9d9;
+  background: #fafafa;
+}
+
+.bubble.translation {
+  border-color: var(--brand-green);
+  background: var(--soft-green);
+}
+
 .bubble.search {
   border-color: var(--brand-green);
   background: var(--soft-green);
@@ -412,6 +439,7 @@ h2 {
   display: grid;
   align-content: start;
   gap: 18px;
+  min-width: 0;
 }
 
 .tool-block {
@@ -473,6 +501,36 @@ h2 {
   margin-top: 14px;
 }
 
+.translation-settings {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.translation-settings label:first-child {
+  margin-top: 0;
+}
+
+.range-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-control input {
+  padding-inline: 0;
+}
+
+.range-control output {
+  color: var(--brand-black);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: right;
+}
+
 .search-form {
   display: grid;
   gap: 10px;
@@ -523,11 +581,18 @@ h2 {
 }
 
 @media (max-width: 680px) {
+  .shell {
+    background: linear-gradient(var(--brand-black) 0 284px, var(--paper) 284px);
+  }
+
   .brand-hero {
     padding-inline: 14px;
+    padding-bottom: 30px;
   }
 
   .topbar {
+    width: 100%;
+    max-width: 100%;
     align-items: flex-start;
     flex-direction: column;
   }
@@ -535,17 +600,25 @@ h2 {
   .status-strip {
     width: 100%;
     justify-content: space-between;
+    min-width: 0;
   }
 
   .hero-copy {
+    width: 100%;
+    max-width: 100%;
     margin-top: 38px;
   }
 
   .hero-copy h1 {
-    font-size: 2.2rem;
+    max-width: 100%;
+    font-size: clamp(1.75rem, 9.5vw, 2.05rem);
+    line-height: 1.12;
+    word-break: break-all;
   }
 
   .workspace {
+    width: 100%;
+    max-width: 100%;
     padding-inline: 14px;
     padding-bottom: 32px;
   }
@@ -555,6 +628,17 @@ h2 {
   .transcript,
   .composer {
     padding-inline: 16px;
+  }
+
+  .tool-head {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .mini-meta {
+    justify-self: start;
+    overflow-wrap: anywhere;
   }
 
   .conversation-panel {
@@ -573,6 +657,12 @@ h2 {
   .button-grid,
   .note-actions {
     grid-template-columns: 1fr;
+  }
+
+  .button-grid button,
+  .note-actions button,
+  .search-form button {
+    width: 100%;
   }
 
   .button-grid .primary {

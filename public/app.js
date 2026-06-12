@@ -23,9 +23,18 @@ const els = {
   copyNoteBtn: document.querySelector("#copyNoteBtn"),
   noteOutput: document.querySelector("#noteOutput"),
   companionName: document.querySelector("#companionName"),
+  sessionMode: document.querySelector("#sessionMode"),
+  translationSettings: document.querySelector("#translationSettings"),
+  translationTargetLanguage: document.querySelector("#translationTargetLanguage"),
+  translationCustomLabel: document.querySelector("#translationCustomLabel"),
+  translationTargetCustom: document.querySelector("#translationTargetCustom"),
   language: document.querySelector("#language"),
   style: document.querySelector("#style"),
   focus: document.querySelector("#focus"),
+  voiceSpeed: document.querySelector("#voiceSpeed"),
+  voiceSpeedLabel: document.querySelector("#voiceSpeedLabel"),
+  vadMode: document.querySelector("#vadMode"),
+  micScene: document.querySelector("#micScene"),
   meter: document.querySelector(".meter")
 };
 
@@ -42,6 +51,8 @@ let localStream;
 let remoteAudio;
 let isMuted = false;
 let currentAssistant;
+let currentSourceTranscript;
+let currentTranslation;
 let accessCode = localStorage.getItem(storageKeys.accessCode) || "";
 let messages = loadMessages();
 
@@ -84,11 +95,39 @@ function loadSettings() {
 function saveSettings() {
   const settings = {
     companionName: els.companionName.value,
+    sessionMode: els.sessionMode.value,
+    translationTargetLanguage: els.translationTargetLanguage.value,
+    translationTargetCustom: els.translationTargetCustom.value,
     language: els.language.value,
     style: els.style.value,
-    focus: els.focus.value
+    focus: els.focus.value,
+    voiceSpeed: els.voiceSpeed.value,
+    vadMode: els.vadMode.value,
+    micScene: els.micScene.value
   };
   localStorage.setItem(storageKeys.settings, JSON.stringify(settings));
+}
+
+function updateModeControls() {
+  const isTranslate = els.sessionMode.value === "translate";
+  els.translationSettings.hidden = !isTranslate;
+  els.companionName.closest("label").hidden = isTranslate;
+  els.language.closest("label").hidden = isTranslate;
+  els.style.closest("label").hidden = isTranslate;
+  els.focus.closest("label").hidden = isTranslate;
+  els.vadMode.closest("label").hidden = isTranslate;
+  els.voiceSpeed.closest("label").hidden = isTranslate;
+  els.startBtn.querySelector("span:last-child").textContent = isTranslate ? "开始口译" : "开始说话";
+  els.messageInput.placeholder = isTranslate ? "口译模式下请直接说话" : "也可以打字补一句";
+  updateTranslationCustom();
+}
+
+function updateTranslationCustom() {
+  els.translationCustomLabel.hidden = els.translationTargetLanguage.value !== "custom";
+}
+
+function updateSpeedLabel() {
+  els.voiceSpeedLabel.textContent = `${Number(els.voiceSpeed.value).toFixed(2)}x`;
 }
 
 function setStatus(text, state = "idle") {
@@ -132,6 +171,8 @@ function speakerForRole(role) {
     user: "你",
     assistant: "搭子",
     system: "System",
+    source: "原文",
+    translation: "译文",
     search: "已查证",
     note: "笔记"
   }[role] || "Message";
@@ -238,7 +279,7 @@ function renderMessages() {
 
 function transcriptForPrompt(limit = 24) {
   return messages
-    .filter((message) => ["user", "assistant", "search", "note"].includes(message.role))
+    .filter((message) => ["user", "assistant", "source", "translation", "search", "note"].includes(message.role))
     .slice(-limit)
     .map((message) => `${speakerForRole(message.role)}: ${message.text}`)
     .join("\n");
@@ -334,6 +375,13 @@ function beginConversation() {
   sendRealtimeEvent({ type: "response.create" });
 }
 
+function translationTargetLabel() {
+  if (els.translationTargetLanguage.value === "custom") {
+    return els.translationTargetCustom.value.trim() || "自定义语言";
+  }
+  return els.translationTargetLanguage.options[els.translationTargetLanguage.selectedIndex]?.textContent || "目标语言";
+}
+
 function handleRealtimeMessage(message) {
   let event;
   try {
@@ -345,6 +393,34 @@ function handleRealtimeMessage(message) {
   if (event.type === "error") {
     addMessage("system", event.error?.message || "Realtime API returned an error.");
     setStatus("Error", "error");
+    return;
+  }
+
+  if (event.type === "session.input_transcript.delta" && event.delta) {
+    if (!currentSourceTranscript) {
+      currentSourceTranscript = addMessage("source", "", { persist: false });
+    }
+    updateBubbleText(currentSourceTranscript, `${currentSourceTranscript.message.text}${event.delta}`);
+    return;
+  }
+
+  if (event.type === "session.input_transcript.done") {
+    persistTransientMessage(currentSourceTranscript);
+    currentSourceTranscript = undefined;
+    return;
+  }
+
+  if (event.type === "session.output_transcript.delta" && event.delta) {
+    if (!currentTranslation) {
+      currentTranslation = addMessage("translation", "", { persist: false });
+    }
+    updateBubbleText(currentTranslation, `${currentTranslation.message.text}${event.delta}`);
+    return;
+  }
+
+  if (event.type === "session.output_transcript.done") {
+    persistTransientMessage(currentTranslation);
+    currentTranslation = undefined;
     return;
   }
 
@@ -383,11 +459,27 @@ function getSessionPayload(sdp) {
   saveSettings();
   return {
     sdp,
+    sessionMode: els.sessionMode.value,
+    translationTargetLanguage:
+      els.translationTargetLanguage.value === "custom" ? "" : els.translationTargetLanguage.value,
+    translationTargetCustom: els.translationTargetCustom.value,
     companionName: els.companionName.value,
     language: els.language.value,
     style: els.style.value,
     focus: els.focus.value,
+    voiceSpeed: els.voiceSpeed.value,
+    vadMode: els.vadMode.value,
+    micScene: els.micScene.value,
     recentContext: transcriptForPrompt(18)
+  };
+}
+
+function getMediaAudioConstraints() {
+  const farField = els.micScene.value === "far";
+  return {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: farField
   };
 }
 
@@ -403,7 +495,7 @@ async function startSession() {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
+        ...getMediaAudioConstraints()
       }
     });
 
@@ -426,11 +518,15 @@ async function startSession() {
 
     dc = pc.createDataChannel("oai-events");
     dc.addEventListener("open", () => {
+      const isTranslate = els.sessionMode.value === "translate";
       setStatus("Live", "live");
       els.muteBtn.disabled = false;
       els.stopBtn.disabled = false;
-      els.sendMessageBtn.disabled = false;
-      addMessage("system", "已连接。");
+      els.sendMessageBtn.disabled = isTranslate;
+      addMessage("system", isTranslate ? `已进入持续口译：翻译成 ${translationTargetLabel()}。` : "已连接。");
+      if (isTranslate) {
+        return;
+      }
       beginConversation();
     });
     dc.addEventListener("message", handleRealtimeMessage);
@@ -479,7 +575,11 @@ function stopSession() {
   }
 
   remoteAudio = undefined;
+  persistTransientMessage(currentSourceTranscript);
+  persistTransientMessage(currentTranslation);
   currentAssistant = undefined;
+  currentSourceTranscript = undefined;
+  currentTranslation = undefined;
   isMuted = false;
   els.muteBtn.querySelector("span:last-child").textContent = "静音";
   els.startBtn.disabled = false;
@@ -507,6 +607,11 @@ function toggleMute() {
 function sendTextMessage(text) {
   const trimmed = text.trim();
   if (!trimmed) {
+    return;
+  }
+
+  if (els.sessionMode.value === "translate") {
+    addMessage("system", "持续口译模式暂时只翻译麦克风语音。要打字聊天，请切回“思绪聊天”。");
     return;
   }
 
@@ -670,10 +775,36 @@ els.searchForm.addEventListener("submit", runSearch);
 els.summarizeBtn.addEventListener("click", summarize);
 els.copyNoteBtn.addEventListener("click", copyNote);
 
-for (const input of [els.companionName, els.language, els.style, els.focus]) {
+for (const input of [
+  els.companionName,
+  els.sessionMode,
+  els.translationTargetLanguage,
+  els.translationTargetCustom,
+  els.language,
+  els.style,
+  els.focus,
+  els.voiceSpeed,
+  els.vadMode,
+  els.micScene
+]) {
   input.addEventListener("change", saveSettings);
 }
 
+els.sessionMode.addEventListener("change", () => {
+  updateModeControls();
+  saveSettings();
+});
+els.translationTargetLanguage.addEventListener("change", () => {
+  updateTranslationCustom();
+  saveSettings();
+});
+els.voiceSpeed.addEventListener("input", () => {
+  updateSpeedLabel();
+  saveSettings();
+});
+
 loadSettings();
+updateSpeedLabel();
+updateModeControls();
 renderMessages();
 loadHealth();

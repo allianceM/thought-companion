@@ -104,6 +104,39 @@
             <details class="settings">
               <summary>偏好</summary>
               <label>
+                会话模式
+                <select id="sessionMode">
+                  <option value="chat" selected>思绪聊天</option>
+                  <option value="translate">持续口译</option>
+                </select>
+              </label>
+
+              <div class="translation-settings" id="translationSettings" hidden>
+                <label>
+                  翻译成
+                  <select id="translationTargetLanguage">
+                    <option value="zh" selected>中文</option>
+                    <option value="en">English</option>
+                    <option value="ko">한국어</option>
+                    <option value="fr">Français</option>
+                    <option value="pt">Português</option>
+                    <option value="es">Español</option>
+                    <option value="ja">日本語</option>
+                    <option value="de">Deutsch</option>
+                    <option value="it">Italiano</option>
+                    <option value="ar">العربية</option>
+                    <option value="ru">Русский</option>
+                    <option value="hi">हिन्दी</option>
+                    <option value="custom">其他 ISO 语言代码</option>
+                  </select>
+                </label>
+                <label id="translationCustomLabel" hidden>
+                  语言代码
+                  <input id="translationTargetCustom" type="text" placeholder="例如 tr, th, vi, id" autocomplete="off">
+                </label>
+              </div>
+
+              <label>
                 名字
                 <input id="companionName" type="text" value="思绪搭子" autocomplete="off">
               </label>
@@ -128,6 +161,28 @@
               <label>
                 关注点
                 <textarea id="focus" rows="4">帮我整理思绪、回答轻量问题、翻译表达、练习发音和做简短复盘</textarea>
+              </label>
+              <label>
+                语速
+                <div class="range-control">
+                  <input id="voiceSpeed" type="range" min="0.5" max="1.5" step="0.05" value="1">
+                  <output id="voiceSpeedLabel" for="voiceSpeed">1.00x</output>
+                </div>
+              </label>
+              <label>
+                聊天节奏
+                <select id="vadMode">
+                  <option value="patient">慢慢说，不急着接话</option>
+                  <option value="balanced" selected>平衡</option>
+                  <option value="quick">快问快答</option>
+                </select>
+              </label>
+              <label>
+                麦克风场景
+                <select id="micScene">
+                  <option value="near" selected>耳机 / 手机近讲</option>
+                  <option value="far">电脑麦克风 / 房间说话</option>
+                </select>
               </label>
             </details>
 

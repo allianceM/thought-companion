@@ -16,6 +16,8 @@ A voice-first thinking companion for quick conversations, light research checks,
 ## What it does
 
 - Starts a low-latency OpenAI Realtime voice session in the browser.
+- Adds speed, turn-taking, and microphone-scene controls for voice sessions.
+- Includes a continuous interpretation mode that translates speech into a selected target language.
 - Keeps the visible transcript in local browser storage.
 - Adds an explicit web search button for current or source-backed questions.
 - Turns the conversation into a concise note with one click.
@@ -45,6 +47,7 @@ npm start
 - `OPENAI_API_KEY`: required.
 - `ACCESS_CODE`: optional shared access code.
 - `REALTIME_MODEL`: defaults to `gpt-realtime-2`.
+- `TRANSLATION_MODEL`: defaults to `gpt-realtime-translate`.
 - `TEXT_MODEL`: defaults to `gpt-5.5`.
 - `REALTIME_VOICE`: defaults to `marin`.
 - `PORT`: defaults to `3334`.
