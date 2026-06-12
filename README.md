@@ -19,7 +19,8 @@ A voice-first thinking companion for quick conversations, light research checks,
 - Adds speed, turn-taking, and microphone-scene controls for voice sessions.
 - Includes a continuous interpretation mode that translates speech into a selected target language.
 - Keeps the visible transcript in local browser storage.
-- Adds an explicit web search button for current or source-backed questions.
+- Automatically checks the web from inside voice conversations when current or source-backed facts are needed.
+- Keeps an explicit web search button as a backup.
 - Turns the conversation into a concise note with one click.
 - Supports an optional `ACCESS_CODE` so friends can try the hosted app without seeing your OpenAI API key.
 

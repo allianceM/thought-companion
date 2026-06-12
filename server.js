@@ -273,6 +273,32 @@ function getTranslationLanguage(payload = {}) {
   return "zh";
 }
 
+function getRealtimeTools() {
+  return [
+    {
+      type: "function",
+      name: "web_check",
+      description:
+        "Search the web for current, source-backed, or high-precision information. Use this before answering questions about latest news, prices, policies, laws, current facts, release versions, public claims, schedules, weather, exchange rates, or whether something is true.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          query: {
+            type: "string",
+            description: "A concise search query in the user's language, including key names, dates, places, or terms."
+          },
+          reason: {
+            type: "string",
+            description: "Briefly explain why web verification is needed."
+          }
+        },
+        required: ["query"]
+      }
+    }
+  ];
+}
+
 function buildInstructions(payload = {}) {
   const name = cleanText(payload.companionName, "思绪搭子");
   const language = cleanText(payload.language, "默认中文，可自然切换英文或其他语言");
@@ -292,7 +318,10 @@ function buildInstructions(payload = {}) {
     "- Ask at most one focused follow-up question when the user's thought is fuzzy.",
     "- For translation, wording, pronunciation, or language practice, give the phrase, a natural variant, and a short spoken pronunciation cue.",
     "- Do not pretend to know things. Never invent dates, prices, citations, laws, medical facts, financial facts, or current events.",
-    "- If a factual answer depends on current or precise information, say it may need checking and suggest using the search button.",
+    "- You have a web_check tool. Use it proactively before answering anything that needs current, source-backed, or high-precision information.",
+    "- Call web_check for latest news, prices, policies, laws, public claims, schedules, weather, exchange rates, release versions, or questions like 'is this true'.",
+    "- If the user says '查一下', '搜一下', '最新', '今天', '现在', '价格', '新闻', '政策', or '是真的吗', call web_check instead of answering from memory.",
+    "- If web_check fails or sources are thin, say that clearly and do not bluff.",
     "- If the user asks about a high-stakes topic such as medical, legal, financial, or safety decisions, be cautious and recommend verifying with a qualified source.",
     "- When you are uncertain, explicitly say what is known, what is uncertain, and what would need checking.",
     "- Do not claim that you searched the web unless a verified search result was provided in the conversation.",
@@ -877,6 +906,8 @@ async function createRealtimeCall(req, res) {
     type: "realtime",
     model: realtimeModel,
     instructions: buildInstructions(payload),
+    tools: getRealtimeTools(),
+    tool_choice: "auto",
     audio: {
       input: {
         noise_reduction: getNoiseReduction(payload),

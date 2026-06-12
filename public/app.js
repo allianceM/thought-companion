@@ -53,6 +53,7 @@ let isMuted = false;
 let currentAssistant;
 let currentSourceTranscript;
 let currentTranslation;
+const processedToolCalls = new Set();
 let accessCode = localStorage.getItem(storageKeys.accessCode) || "";
 let messages = loadMessages();
 
@@ -359,7 +360,7 @@ function beginConversation() {
   const kickoff = [
     "先用中文简短打招呼。",
     "告诉我可以直接说脑子里正在转的事。",
-    "如果问题需要最新事实，提醒我可以点“联网查证”。",
+    "如果问题需要最新事实，告诉我可以直接说“帮我查一下”，你会自动查证。",
     "然后问我：现在最想理顺的是什么？"
   ].join(" ");
 
@@ -380,6 +381,92 @@ function translationTargetLabel() {
     return els.translationTargetCustom.value.trim() || "自定义语言";
   }
   return els.translationTargetLanguage.options[els.translationTargetLanguage.selectedIndex]?.textContent || "目标语言";
+}
+
+function getFunctionCalls(response) {
+  return (response?.output || []).filter((item) => item?.type === "function_call" && item.name === "web_check");
+}
+
+function parseToolArguments(rawArguments) {
+  if (!rawArguments) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawArguments);
+  } catch {
+    return {};
+  }
+}
+
+function sendToolOutput(callId, output) {
+  const sent = sendRealtimeEvent({
+    type: "conversation.item.create",
+    item: {
+      type: "function_call_output",
+      call_id: callId,
+      output: JSON.stringify(output)
+    }
+  });
+
+  if (sent) {
+    sendRealtimeEvent({ type: "response.create" });
+  }
+}
+
+async function executeWebCheckTool(call) {
+  const callId = call.call_id || call.id;
+  if (!callId || processedToolCalls.has(callId)) {
+    return;
+  }
+  processedToolCalls.add(callId);
+
+  const args = parseToolArguments(call.arguments);
+  const query = String(args.query || getLatestUserText()).trim();
+  if (!query) {
+    sendToolOutput(callId, {
+      ok: false,
+      error: "No search query was provided."
+    });
+    return;
+  }
+
+  const pending = addMessage("search", `正在自动查证：${query}`, { persist: false });
+
+  try {
+    const result = await postJson("/search", {
+      query,
+      context: transcriptForPrompt(24)
+    });
+
+    pending.message.sources = result.sources || [];
+    if (pending.message.sources.length) {
+      pending.bubble.append(renderSources(pending.message.sources));
+    }
+    updateBubbleText(pending, result.text);
+    persistTransientMessage(pending);
+
+    sendToolOutput(callId, {
+      ok: true,
+      query,
+      answer: result.text,
+      sources: pending.message.sources.map((source) => ({
+        title: source.title,
+        url: source.url
+      }))
+    });
+  } catch (error) {
+    updateBubbleText(pending, `自动查证失败：${error.message}`);
+    pending.message.role = "system";
+    pending.bubble.className = "bubble system";
+    persistTransientMessage(pending);
+
+    sendToolOutput(callId, {
+      ok: false,
+      query,
+      error: error.message
+    });
+  }
 }
 
 function handleRealtimeMessage(message) {
@@ -447,11 +534,28 @@ function handleRealtimeMessage(message) {
   if (
     event.type === "response.audio_transcript.done" ||
     event.type === "response.output_audio_transcript.done" ||
-    event.type === "response.text.done" ||
-    event.type === "response.done"
+    event.type === "response.text.done"
   ) {
     persistTransientMessage(currentAssistant);
     currentAssistant = undefined;
+    return;
+  }
+
+  if (event.type === "response.output_item.done" && event.item?.type === "function_call") {
+    void executeWebCheckTool(event.item);
+    return;
+  }
+
+  if (event.type === "response.done") {
+    persistTransientMessage(currentAssistant);
+    currentAssistant = undefined;
+
+    const calls = getFunctionCalls(event.response);
+    if (calls.length) {
+      for (const call of calls) {
+        void executeWebCheckTool(call);
+      }
+    }
   }
 }
 
