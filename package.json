@@ -1,0 +1,15 @@
+{
+  "name": "thought-companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "background": "zsh scripts/start-background.sh",
+    "doctor": "node scripts/doctor.js",
+    "start": "node server.js",
+    "stop": "zsh scripts/stop-background.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

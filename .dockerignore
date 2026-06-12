@@ -1,0 +1,7 @@
+.env
+.git
+.server.pid
+node_modules
+dist
+logs
+.DS_Store

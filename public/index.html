@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Thought Companion</title>
+    <link rel="icon" href="/logo.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand-hero">
+        <nav class="topbar" aria-label="Session">
+          <a class="brand-lockup" href="/" aria-label="Thought Companion">
+            <img src="/logo.svg" alt="">
+            <span>
+              <span class="eyebrow">THOUGHT COMPANION</span>
+              <strong>思绪搭子</strong>
+            </span>
+          </a>
+
+          <div class="status-strip">
+            <span class="status-dot" id="serverDot"></span>
+            <span id="serverStatus">连接中</span>
+            <span class="status-pill" id="status">Idle</span>
+          </div>
+        </nav>
+
+        <section class="hero-copy" aria-labelledby="heroTitle">
+          <p class="eyebrow">VOICE FIRST · LOCAL NOTES</p>
+          <h1 id="heroTitle">随时说两句，把脑子里的线头理顺。</h1>
+        </section>
+      </header>
+
+      <section class="workspace">
+        <section class="conversation-panel" aria-labelledby="conversationTitle">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">LIVE THREAD</p>
+              <h2 id="conversationTitle">对话记录</h2>
+            </div>
+            <div class="meter" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+
+          <div class="transcript" id="transcript" aria-live="polite">
+            <div class="empty-state">
+              <strong>可以开始了。</strong>
+              <span>按下开始后直接说；文字记录会保存在这个浏览器。</span>
+            </div>
+          </div>
+
+          <form class="composer" id="messageForm">
+            <input id="messageInput" type="text" placeholder="也可以打字补一句" autocomplete="off">
+            <button id="sendMessageBtn" type="submit" disabled>
+              <span aria-hidden="true">↵</span>
+              <span>发送</span>
+            </button>
+          </form>
+        </section>
+
+        <aside class="side-rail" aria-label="Controls">
+          <section class="tool-block">
+            <div class="tool-head">
+              <div>
+                <p class="eyebrow">SESSION</p>
+                <h2>语音</h2>
+              </div>
+              <span class="mini-meta" id="keyStatus">Key pending</span>
+            </div>
+
+            <form class="access-panel" id="accessPanel" hidden>
+              <label>
+                Access code
+                <input id="accessCode" type="password" placeholder="输入分享码" autocomplete="off">
+              </label>
+              <button id="saveAccessBtn" type="button">解锁</button>
+              <div class="access-status" id="accessStatus">这个工具已开启分享保护。</div>
+            </form>
+
+            <div class="button-grid">
+              <button id="startBtn" class="primary" type="button">
+                <span aria-hidden="true">●</span>
+                <span>开始说话</span>
+              </button>
+              <button id="muteBtn" type="button" disabled>
+                <span aria-hidden="true">◐</span>
+                <span>静音</span>
+              </button>
+              <button id="stopBtn" type="button" disabled>
+                <span aria-hidden="true">■</span>
+                <span>停止</span>
+              </button>
+              <button id="clearHistoryBtn" type="button">
+                <span aria-hidden="true">⌫</span>
+                <span>清空</span>
+              </button>
+            </div>
+
+            <details class="settings">
+              <summary>偏好</summary>
+              <label>
+                名字
+                <input id="companionName" type="text" value="思绪搭子" autocomplete="off">
+              </label>
+              <label>
+                默认语言
+                <select id="language">
+                  <option selected>默认中文，可自然切换英文或其他语言</option>
+                  <option>主要中文</option>
+                  <option>主要英文</option>
+                  <option>跟随我当前使用的语言</option>
+                </select>
+              </label>
+              <label>
+                回答风格
+                <select id="style">
+                  <option selected>像朋友一样温和、直接、会追问，也会诚实说不确定</option>
+                  <option>更像教练，帮我拆逻辑和下一步</option>
+                  <option>更像语言搭子，优先翻译、表达和发音</option>
+                  <option>更克制，只给短答案</option>
+                </select>
+              </label>
+              <label>
+                关注点
+                <textarea id="focus" rows="4">帮我整理思绪、回答轻量问题、翻译表达、练习发音和做简短复盘</textarea>
+              </label>
+            </details>
+
+            <div class="setup-footer">
+              <span id="proxyStatus">Network route pending</span>
+            </div>
+          </section>
+
+          <section class="tool-block">
+            <div class="tool-head">
+              <div>
+                <p class="eyebrow">CHECK</p>
+                <h2>查一下</h2>
+              </div>
+            </div>
+
+            <form class="search-form" id="searchForm">
+              <textarea id="searchInput" rows="3" placeholder="留空时默认查最近一句"></textarea>
+              <button id="searchBtn" class="secondary" type="submit">
+                <span aria-hidden="true">⌕</span>
+                <span>联网查证</span>
+              </button>
+            </form>
+          </section>
+
+          <section class="tool-block">
+            <div class="tool-head">
+              <div>
+                <p class="eyebrow">NOTE</p>
+                <h2>总结</h2>
+              </div>
+            </div>
+
+            <div class="note-actions">
+              <button id="summarizeBtn" class="secondary" type="button">
+                <span aria-hidden="true">▤</span>
+                <span>生成笔记</span>
+              </button>
+              <button id="copyNoteBtn" type="button" disabled>
+                <span aria-hidden="true">⧉</span>
+                <span>复制</span>
+              </button>
+            </div>
+            <pre class="note-output" id="noteOutput">还没有笔记。</pre>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
